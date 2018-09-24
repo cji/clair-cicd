@@ -117,8 +117,8 @@ if ! docker pull "$CLAIR_IMAGE" > /dev/null; then
 fi
 echo_if_verbose "$(ts) successfully pulled clair image"
 
-CLAIR_API_PORT=$(yq .clair.api.port < "$CLAIR_CONFIG_YAML")
-CLAIR_HEALTH_API_PORT=$(yq .clair.api.healthport < "$CLAIR_CONFIG_YAML")
+CLAIR_API_PORT=6060
+CLAIR_HEALTH_API_PORT=6061
 
 CLAIR_CONTAINER=clair-$(openssl rand -hex 8)
 echo_if_verbose "$(ts) starting clair container '$CLAIR_CONTAINER'"
