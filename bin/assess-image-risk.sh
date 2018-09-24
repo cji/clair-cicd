@@ -53,7 +53,7 @@ DOCKER_IMAGE_TO_ANALYZE=${1:-}
 #
 # :TODO: clair database version & clair version should match
 CLAIR_DATABASE_IMAGE=simonsdave/clair-cicd-database:latest
-CLAIR_VERSION=$(python -c "import clair_cicd; print clair_cicd.__clair_version__")
+CLAIR_VERSION=v2.0.5
 CLAIR_IMAGE=quay.io/coreos/clair:$CLAIR_VERSION
 # :TODO: should not be latest version
 CLAIR_CICD_TOOLS_IMAGE=simonsdave/clair-cicd-tools:latest
