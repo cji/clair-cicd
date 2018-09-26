@@ -51,108 +51,10 @@ DOCKER_IMAGE_TO_ANALYZE=${1:-}
 #
 # general configuration
 #
-# :TODO: clair database version & clair version should match
-CLAIR_DATABASE_IMAGE=simonsdave/clair-cicd-database:latest
-CLAIR_VERSION=v2.0.5
-CLAIR_IMAGE=quay.io/coreos/clair:$CLAIR_VERSION
 # :TODO: should not be latest version
 CLAIR_CICD_TOOLS_IMAGE=simonsdave/clair-cicd-tools:latest
 
-#
-# pull image and spin up clair database
-#
-if [ "0" -eq "${NO_PULL_DB_AND_TOOLS_DOCKER_IMAGES:-0}" ]; then
-    echo_if_verbose "$(ts) pulling clair database image '$CLAIR_DATABASE_IMAGE'"
-    if ! docker pull $CLAIR_DATABASE_IMAGE > /dev/null; then
-        echo "$(ts) error pulling clair database image '$CLAIR_DATABASE_IMAGE'" >&2
-        exit 1
-    fi
-    echo_if_verbose "$(ts) successfully pulled clair database image"
-else
-    echo_if_verbose "$(ts) **not** pulling clair database image '$CLAIR_DATABASE_IMAGE'"
-fi
-
-CLAIR_DATABASE_CONTAINER=clair-db-$(openssl rand -hex 8)
-echo_if_verbose "$(ts) starting clair database container '$CLAIR_DATABASE_CONTAINER'"
-if ! docker run --name "$CLAIR_DATABASE_CONTAINER" -d "$CLAIR_DATABASE_IMAGE" > /dev/null; then
-    echo "$(ts) error starting clair database container '$CLAIR_DATABASE_CONTAINER'" >&2
-    exit 1
-fi
-
-echo_if_verbose -n "$(ts) waiting for database server in container '$CLAIR_DATABASE_CONTAINER' to start "
-while true
-do
-    if docker logs "$CLAIR_DATABASE_CONTAINER" |& grep "database system is ready to accept connections" > /dev/null; then
-        break
-    fi
-    echo_if_verbose -n "."
-    sleep 1
-done
-echo_if_verbose ""
-
-echo_if_verbose "$(ts) successfully started clair database container"
-
-#
-# pull image and spin up clair
-#
-CLAIR_CONFIG_DIR=$(mktemp -d 2> /dev/null || mktemp -d -t DAS)
-CLAIR_CONFIG_YAML=$CLAIR_CONFIG_DIR/config.yaml
-echo_if_verbose "$(ts) clair configuration in '$CLAIR_CONFIG_YAML'"
-
-curl \
-    -s \
-    -o "$CLAIR_CONFIG_YAML" \
-    -L \
-    "https://raw.githubusercontent.com/coreos/clair/$CLAIR_VERSION/config.example.yaml"
-
-sed \
-    -i \
-    -e 's|source:.*$|source: postgresql://postgres@clair-database:5432/clair?sslmode=disable|g' \
-    "$CLAIR_CONFIG_YAML"
-
-echo_if_verbose "$(ts) pulling clair image '$CLAIR_IMAGE'"
-if ! docker pull "$CLAIR_IMAGE" > /dev/null; then 
-    echo "$(ts) error pulling clair image '$CLAIR_IMAGE'" >&2
-    exit 1
-fi
-echo_if_verbose "$(ts) successfully pulled clair image"
-
-CLAIR_API_PORT=6060
-CLAIR_HEALTH_API_PORT=6061
-
-CLAIR_CONTAINER=clair-$(openssl rand -hex 8)
-echo_if_verbose "$(ts) starting clair container '$CLAIR_CONTAINER'"
-if ! docker run \
-    -d \
-    --name "$CLAIR_CONTAINER" \
-    -p "$CLAIR_API_PORT":"$CLAIR_API_PORT" \
-    -p "$CLAIR_HEALTH_API_PORT":"$CLAIR_HEALTH_API_PORT" \
-    --link "$CLAIR_DATABASE_CONTAINER":clair-database \
-    -v /tmp:/tmp \
-    -v "$CLAIR_CONFIG_DIR":/config \
-    "$CLAIR_IMAGE" \
-    -log-level=info \
-    -config=/config/config.yaml \
-    > /dev/null;
-then
-    echo "$(ts) error starting clair container '$CLAIR_CONTAINER'" >&2
-    exit 1
-fi
-
-CLAIR_IP_ADDRESS=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' "$CLAIR_CONTAINER")
-CLAIR_ENDPOINT=http://$CLAIR_IP_ADDRESS:$CLAIR_API_PORT
-CLAIR_HEALTH_ENDPOINT=http://$CLAIR_IP_ADDRESS:$CLAIR_HEALTH_API_PORT
-
-while true
-do
-    HTTP_STATUS_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$CLAIR_HEALTH_ENDPOINT/health")
-    if [ "200" == "$HTTP_STATUS_CODE" ]; then
-        break
-    fi
-    sleep 1
-done
-
-echo_if_verbose "$(ts) successfully started clair container '$CLAIR_CONTAINER'"
+CLAIR_ENDPOINT=https://wschmitt-clair.herokuapp.com:443
 
 #
 #
@@ -254,12 +156,6 @@ EXIT_CODE=$(docker inspect --format '{{ .State.ExitCode }}' "$CLAIR_CICD_TOOLS_C
 #
 docker kill "$CLAIR_CICD_TOOLS_CONTAINER" >& /dev/null
 docker rm "$CLAIR_CICD_TOOLS_CONTAINER" >& /dev/null
-
-docker kill "$CLAIR_CONTAINER" >& /dev/null
-docker rm "$CLAIR_CONTAINER" >& /dev/null
-
-docker kill "$CLAIR_DATABASE_CONTAINER" >& /dev/null
-docker rm "$CLAIR_DATABASE_CONTAINER" >& /dev/null
 
 #
 # we're all done:-)
